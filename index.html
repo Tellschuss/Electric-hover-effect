@@ -1,0 +1,70 @@
+<a href="https://twitter.com/not__robin" target="_blank">ENTER</a>
+
+<script id="vertexShader" type="x-shader/x-vertex">
+	varying vec2 vUv;
+	void main() {
+		vUv = uv;
+		gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+	}
+</script>
+
+<script id="fragmentShader" type="x-shader/x-fragment">
+	uniform sampler2D _circle;
+	uniform sampler2D _circle_blur;
+	uniform sampler2D _dist;
+	uniform sampler2D _mask;
+	uniform sampler2D _color;
+	uniform float _time;
+	varying vec2 vUv;
+
+	//custom
+	uniform float _dispFactor;
+	uniform float _speed;
+
+	float map(float value, float minA, float maxA, float minB, float maxB){
+			return (value - minA) / (maxA - minA) * (maxB - minB) + minB;
+	}
+
+	void main()	{
+
+		vec2 uv = vUv;
+
+		vec4 circleTexture = texture2D( _mask, uv );
+
+			vec2 scaleCenter = vec2(0.5, 0.5);
+
+			vec2 coord = uv;
+			float sin_factor = sin(0.72 * _time);
+			float cos_factor = cos(0.72 * _time);
+			coord = vec2(coord.x - 0.5, coord.y - 0.5) * mat2(cos_factor, sin_factor, -sin_factor, cos_factor);
+			coord += 0.5;
+
+
+			vec2 distMapUV = uv * 0.22;
+			distMapUV.y -= _time / _speed;
+
+			vec4 mapColorDisp = texture2D( _color, (coord - scaleCenter) * 0.7 + scaleCenter );
+			vec4 mapDisp = texture2D( _dist, distMapUV);// - 0.75;
+
+			float xDisp = map( mapColorDisp.x, 0.0, 1.0, -1.0, 1.0 ) * mapDisp.x * _dispFactor;
+			float yDisp = map( mapColorDisp.y, 0.0, 1.0, -1.0, 1.0 ) * mapDisp.x * _dispFactor;
+
+			vec2 uvDisp = vec2(
+					clamp( xDisp * 0.3448 * circleTexture.a, -0.1, 0.1 ),
+					clamp( yDisp * 0.3448 * circleTexture.a, -0.1, 0.1 )
+			);
+
+			float maskCircle = circleTexture.a * 1.8;
+
+		vec2 scaledUV = vec2((uv - scaleCenter) * 1.5 + scaleCenter );
+
+			vec4 tex_light = texture2D( _circle, scaledUV + uvDisp * coord * 1.5);
+			vec4 tex_lightBlur = texture2D( _circle_blur, scaledUV + uvDisp * coord * 1.5);
+			tex_lightBlur.a *= (8.41 * circleTexture.a);
+		tex_lightBlur.rgb *= 2.2;
+			tex_light.rgb *= 1.6 * max((1.0 - maskCircle), .0);
+
+
+		gl_FragColor = mix(tex_light, tex_lightBlur, min(maskCircle, 1.0));
+	}
+</script>
